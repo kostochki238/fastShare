@@ -1,0 +1,33 @@
+.files {
+	display: grid;
+	grid-template-areas:
+		"owned shared"
+		"upload upload";
+	width: 80%;
+	height: fit-content;
+	border-radius: 10px;
+	border: 1px solid black;
+}
+
+.files > * {
+	height: 40px;
+}
+
+.files > .owned {
+	grid-area: "owned";
+}
+
+.files > .shared {
+	grid-ared: "shared";
+}
+
+.files > :not(:nth-first-child(1)) {
+	border-top: 1px solid gray;
+}
+
+.files > .upload {
+	grid-area: "upload";
+	width: 100%;
+	border-bottom-left-radius: 10px;
+	border-bottom-right-radius: 10px;
+}
