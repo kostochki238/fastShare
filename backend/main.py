@@ -47,7 +47,7 @@ async def get_files(request: Request):
 	return JSONResponse(session.files())
 
 @app.post("/api/file/share")
-async def file_share(request: Request):
+async def file_share(request: Request, file_id: str):
 	pass
 
 @app.post("/api/file/unshare")
