@@ -2,7 +2,6 @@ from engine import *
 
 
 class User(Base):
-	uuid: Mapped[str] = mapped_column(default=lambda: str(_id()), unique=True)
 	name: Mapped[str] = mapped_column(Computed("'NPC ' | id"))
 	password: Mappes[str] = mapped_column(String(128), default=uuid, nullable=False)
 	permissions: Mapped[Permissions] = mapped_column(default=Permissions.USER)
@@ -11,22 +10,50 @@ class User(Base):
 		"Room", secondary="users_rooms", back_populates="users"
 	)
 
-	def can_modify_room(self, uuid: str, **kwargs)
-
-	def create_room(self, name: Optional[str] = None) -> Mapped["Room"]:
+	@Access.status({
+		-1: "database error",
+		0: "successfully created new room",
+	})
+	def create_room(self, name: Optional[str] = None):
 		room = Room(name=name, owner_id=self.id)
 		session.add(room)
 		session.commit()
-		return room
+		return 0, room
+
+	def can_modify(self, type_: str, uuid: str, **kwargs):
+		room = globals()[type_].get_one(uuid=uuid)
+		return (room.owner_id == self.id) if room is not None else True
 
 	@Access.protect(
-		can_modify_room,
+		can_modify,
 		statuses={
-			-1: "access denied, reason: [not enough permissions in this room]"
+			-2: "room doesn't exist",
+			-1: "access denied, reason: [not enough permissions in this room]",
+			0: "successfully modified"
 		}
 	)
-	def modify_room(self, uuid: str, **kwargs):
-		pass
+	def modify(self, type_: str, uuid: str, **kwargs):
+		obj = globals()[type_].get_one(uuid=uuid)
+		if room:
+			for arg, value in kwargs.items():
+				if hasattr(room, arg):
+					setattr(room, arg, value)
+			return 0
+		return -2
 
+	@Access.status({
+		-1: "room doesn't exist",
+		0: "successfully joined room",
+		1: "already joined to room"
+	})
 	def join_room(self, uuid: str):
-		pass
+		room = Room.get_one(uuid=uuid)
+		if room:
+			if room not in self.rooms:
+				self.rooms.add(room)
+				session.commit()
+				return 1
+			return 0
+		return -1
+
+

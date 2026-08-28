@@ -26,6 +26,7 @@ class Permissions(IntEnum):
 
 class SearchMixin:
 	id: Mapped[int] = mapped_column(primary_key=True)
+	uuid: Mapped[str] = mapped_column(default=lambda: str(_id()), unique=True)
 
 	@declared_attr.directive
 	def __tablename__(cls):
@@ -60,7 +61,7 @@ class Access:
 					"status": ("info" if ret[0] >= 0 else "error"),
 					"message": statuses.get(ret, "success")
 				}
-				return (msg, ret[1:])
+				return (msg, *ret[1:])
 
 			if not hasattr(func, "statuses"):
 				wrapped.statuses = statuses
@@ -76,10 +77,21 @@ class Access:
 
 		def protector(func: Callable):
 			func = status(statuses)(func)
+
 			def protected(*args, **kwargs):
-				if determinator(*args, **kwargs):
-					return func(*args, **kwargs)
-				return statuses.get(denied, "accss denied")
+				try:
+					if determinator(*args, **kwargs):
+						return func(*args, **kwargs)
+					return {
+						"status": "error",
+						"message": func.statuses.get(denied, "access denied")
+					}, None
+				except Exception as e:
+					return {
+						"status": "error",
+						"message": "database error",
+						"error": e
+					}, None
 			return protected
 		return protector
 
