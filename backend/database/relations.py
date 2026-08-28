@@ -1,10 +1,10 @@
-from engine import *
+from .engine import *
 
-shared_files = Table(
-	"shared_files",
+room_files = Table(
+	"room_files",
 	Base.metadata,
-	Column("file_id", Integer, ForeignKey("file.id"), primary_key=True),
-	Column("room_id", Integer, ForeignKey("room.id"), primary_key=True)
+	Column("room_id", Integer, ForeignKey("room.id"), primary_key=True),
+	Column("file_id", Integer, ForeignKey("file.id"), primary_key=True)
 )
 
 users_rooms = Table(

@@ -1,9 +1,9 @@
-from engine import *
+from .engine import *
 
 
 class User(Base):
 	name: Mapped[str] = mapped_column(Computed("'NPC ' | id"))
-	password: Mappes[str] = mapped_column(String(128), default=uuid, nullable=False)
+	password: Mapped[str] = mapped_column(String(128), Computed("uuid"), nullable=False)
 	permissions: Mapped[Permissions] = mapped_column(default=Permissions.USER)
 
 	rooms: Mapped[List["Room"]] = relationship(
@@ -12,7 +12,7 @@ class User(Base):
 
 	@Access.status({
 		-1: "database error",
-		0: "successfully created new room",
+		0: "successfully created new room"
 	})
 	def create_room(self, name: Optional[str] = None):
 		room = Room(name=name, owner_id=self.id)
@@ -56,4 +56,12 @@ class User(Base):
 			return 0
 		return -1
 
-
+	@Access.status({
+		-1: "database error",
+		0: "success upload"
+	})
+	def upload_file(self, name: str, size: int):
+		file = File(name=name, size=size, owner_id=self.id)
+		session.add(file)
+		session.commit()
+		return 0, file

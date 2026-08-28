@@ -1,6 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, declared_attr, \
-	mapped_column, sessionmaker
+	mapped_column, relationship, sessionmaker
 from sqlalchemy.schema import CheckConstraint, Column, Computed, \
 	ForeignKey, MetaData, Table  
 from sqlalchemy.types import Integer, String
@@ -63,9 +63,12 @@ class Access:
 				}
 				return (msg, *ret[1:])
 
+			wrapped.func = func
+
 			if not hasattr(func, "statuses"):
 				wrapped.statuses = statuses
 			else:
+				wrapped.statuses = func.statuses.copy()
 				wrapped.statuses.update(statuses)
 			return wrapped
 		return wrapper
@@ -76,8 +79,6 @@ class Access:
 			else lambda *ar, **kw: determinator
 
 		def protector(func: Callable):
-			func = status(statuses)(func)
-
 			def protected(*args, **kwargs):
 				try:
 					if determinator(*args, **kwargs):
@@ -92,11 +93,13 @@ class Access:
 						"message": "database error",
 						"error": e
 					}, None
+
+			func = protected.func = Access.status(statuses)(func)
 			return protected
 		return protector
 
 
 from .file import File
-from .relations import shared_files, users_rooms
+from .relations import room_files, users_rooms
 from .room import Room
 from .user import User

@@ -1,4 +1,4 @@
-from engine import Base, engine
+from .engine import Base, engine
 
 if __name__ == '__main__':
 	print("[SYSTEM] Creating database...")
