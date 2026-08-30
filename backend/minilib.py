@@ -1,20 +1,32 @@
 from asyncio import new_event_loop
+from dataclasses import dataclass
 from inspect import BoundArguments, Signature
 from inspect import iscoroutine, signature
 from threading import Thread, Semaphore
 from typing import Callable, Awaitable
+from uuid import UUID, uuid
 
 Function = Callable | Awaitable
 
 
-class RunError(Exception):
-	pass
-
-
 class Build:
+	class RunError(Exception):
+		pass
+
+	class BuildError(Exception):
+		pass
+
+	@dataclass
+	class Result:
+		func: Function
+		result: Any
+		uuid: UUID
+
+	_ba: BoundArguments = None
+	_uuid: UUID = None
+	_finished: bool = False
 	_func: Function = None
 	_sig: Signature = None
-	_ba: BoundArguments = None
 
 	def __init__(self, func: Function):
 		self._func = func
@@ -22,16 +34,27 @@ class Build:
 
 	def run(self, loop, unbound: bool = True):
 		if self._ba is None:
-			raise RunError("function is not built")
+			raise Build.RunError("function is not built")
 		args, kwargs = self._ba.args, self._ba.kwargs
-		ret = self._func(*args, **kwargs)
+		self._result = self._func(*args, **kwargs)
 		if iscoroutine(self._func):
-			ret = loop.run_until_complete(ret)
+			self._result = loop.run_until_complete(ret)
 		if unbound:
 			self._ba = None
+		self._finished = True
 		return self
 
-	def build(self, *args, **kwargs):
+	@property
+	def result(self):
+		res = self._result
+		self._result = None
+		self._finished = False
+		return Result(func=self._func, result=res, uuid=self._uuid)
+
+	def build(self, uuid: UUID, *args, **kwargs):
+		if self._result:
+			raise Build.BuildError("first get .result property")
+		self._uuid = uuid
 		self._ba = self._sig.bind(*args, **kwargs)
 		return self._ba
 
@@ -43,24 +66,25 @@ class Build:
 class Executor:
 	class Workers(Semaphore):
 		_threads: set[Thread] = set()
-		_tasks: list[Build] = []
-		_finished: list[Build] = []
-		type_: int = 0
+		_tasks: dict[UUID, Build] = {}
+		_uuid: UUID = None
+		_type: int = 0
 		INFINITE: int = 0
 		STANDARD: int = 1
 
-		def __init__(self, standard_count: int = 8, infinite_count: int = 2):
+		def __init__(self, count: int = 8, type_: int = Workers.INFINITE):
 			super().__init__(self, 0)
-			for inf in range(infinite_count):
+			self._type = type_
+			for _ in range(count):
 				self._threads.add(
-					Thread(target=self.worker, args=(self, Workers.INFINITE,))
+					Thread(target=self.worker, args=(self, ))
 				)
 
 		def acquire(self, func: Callable | Awaitable | Build, *args, **kwargs):
 			if isinstance(func, Build):
 				self._tasks.append(func(*args, **kwargs))
 			else:
-				self._tasks.append(Build(func)(*args, **kwargs))
+				self._tasks.append(Build(uuid, func)(*args, **kwargs))
 			return super().acquire(False)
 
 		def release(self):
@@ -72,4 +96,9 @@ class Executor:
 			while True:
 				item = self.release()
 				if item is not None:
-					item.run(loop, self.type_ == Workers.STANDARD)
+					try:
+						item.run(loop, self.type_ == Workers.STANDARD)
+						if self.type_ == Workers.INFINITE:
+							self.acquire(item)
+					except StopInfinite:
+						pass
